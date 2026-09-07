@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 
 WHATSAPP_URL = "https://web.whatsapp.com/"
 
-# WhatsApp Web pins the "Message yourself" chat with the "(You)" suffix.
-SELF_CHAT_SELECTOR = 'span[title$="(You)"]'
+# WhatsApp Web marks the "Message yourself" chat with a locale-dependent suffix on
+# your own name ("(You)" in English, "(Tú)" in Spanish, …). The suffix comes from
+# Settings.self_chat_suffix so the same code works across host languages.
+SELF_CHAT_SELECTOR_TEMPLATE = 'span[title$="{suffix}"]'
 CHAT_LIST_SELECTOR = 'div[aria-label][role="grid"], #pane-side'
 MESSAGE_BOX_SELECTOR = 'div[contenteditable="true"][data-tab="10"]'
 
@@ -38,7 +40,10 @@ class WhatsAppClient:
 
     async def open_self_chat(self) -> None:
         """Open the 'Message yourself' chat."""
-        chat = self.page.locator(SELF_CHAT_SELECTOR).first
+        selector = SELF_CHAT_SELECTOR_TEMPLATE.format(
+            suffix=self.settings.self_chat_suffix
+        )
+        chat = self.page.locator(selector).first
         await chat.wait_for(timeout=self.settings.timeout_ms)
         await chat.click()
 

@@ -28,6 +28,13 @@ def test_settings_defaults() -> None:
     assert settings.headless is False
     assert settings.timeout_ms == 60_000
     assert settings.log_level == "INFO"
+    assert settings.self_chat_suffix == "(You)"
+
+
+def test_self_chat_suffix_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMMEPE_SELF_CHAT_SUFFIX", "(Tú)")
+
+    assert Settings().self_chat_suffix == "(Tú)"
 
 
 async def test_send_rejects_empty_message() -> None:
