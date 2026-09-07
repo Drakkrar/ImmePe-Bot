@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from playwright.async_api import (
     BrowserContext,
     Page,
+    Playwright,
     async_playwright,
 )
 from playwright.async_api import (
@@ -147,15 +148,43 @@ class WhatsAppClient:
         )
 
 
+async def _headless_user_agent(playwright: Playwright) -> str:
+    """This Chromium's user agent with the 'HeadlessChrome' token replaced by 'Chrome'.
+
+    WhatsApp Web serves an "unsupported browser" page to a headless user agent, so the
+    chat list never loads. Reusing the real browser version (rather than hard-coding
+    one) keeps us past WhatsApp's "Chrome 100+" gate across Chromium upgrades.
+    """
+    browser = await playwright.chromium.launch(headless=True)
+    try:
+        page = await browser.new_page()
+        user_agent: str = await page.evaluate("() => navigator.userAgent")
+    finally:
+        await browser.close()
+    return user_agent.replace("HeadlessChrome", "Chrome")
+
+
 @asynccontextmanager
 async def whatsapp_session(settings: Settings) -> AsyncIterator[WhatsAppClient]:
     """Launch a persistent browser context so the login survives restarts."""
     settings.profile_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
+        # Headless Chromium is rejected by WhatsApp Web unless we mask the headless
+        # user agent and the automation flag it exposes.
+        user_agent = (
+            await _headless_user_agent(playwright) if settings.headless else None
+        )
+        args = (
+            ["--disable-blink-features=AutomationControlled"]
+            if settings.headless
+            else None
+        )
         context: BrowserContext = await playwright.chromium.launch_persistent_context(
             user_data_dir=str(settings.profile_dir),
             headless=settings.headless,
+            user_agent=user_agent,
+            args=args,
         )
         try:
             page = context.pages[0] if context.pages else await context.new_page()

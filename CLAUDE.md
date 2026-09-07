@@ -72,6 +72,13 @@ Four modules in `src/immepe_bot/`, all async:
   than silently succeeding.
 - **First login must run with `IMMEPE_HEADLESS=false`** (a visible window is needed to
   scan the QR). Only after a session is persisted in `profile_dir` can headless be used.
+- **Headless needs user-agent masking.** WhatsApp Web serves an "unsupported browser"
+  page to a `HeadlessChrome` user agent, so the chat list never loads and
+  `wait_until_ready` times out. `whatsapp_session` therefore only in headless mode
+  launches with `user_agent` = this Chromium's UA with `HeadlessChrome`→`Chrome`
+  (via `_headless_user_agent`, a throwaway launch so the version isn't hard-coded) plus
+  `--disable-blink-features=AutomationControlled`. Don't hard-code a UA — WhatsApp gates
+  on the Chrome version, so it must track the installed Chromium.
 - **`profile_dir` (`.whatsapp-profile`) holds live WhatsApp credentials.** It is
   gitignored; never commit it and never print its contents.
 
