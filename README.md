@@ -44,7 +44,7 @@ See [.env.example](.env.example).
 | `IMMEPE_HEADLESS` | `false` | Run Chromium without a window (only after the first login) |
 | `IMMEPE_TIMEOUT_MS` | `60000` | Timeout for WhatsApp Web UI waits |
 | `IMMEPE_LOG_LEVEL` | `INFO` | Logging level |
-| `IMMEPE_SELF_CHAT_SUFFIX` | `(You)` | Locale suffix on your own name in the self chat (`(Tú)` in Spanish) |
+| `IMMEPE_SELF_CHAT_TITLE` | _(required for send/schedule)_ | Exact label on your "Message yourself" chat, i.e. your own WhatsApp display name |
 
 The profile directory contains credentials for your WhatsApp session. Keep it out
 of version control and off shared machines.

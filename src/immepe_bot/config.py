@@ -24,10 +24,11 @@ class Settings(BaseSettings):
     # Milliseconds to wait for WhatsApp Web UI elements.
     timeout_ms: int = Field(default=60_000, gt=0)
     log_level: str = Field(default="INFO")
-    # Locale-dependent suffix WhatsApp Web appends to your own name on the
-    # "Message yourself" chat: "(You)" in English, "(Tú)" in Spanish, etc.
-    # Override this to match the language of the host running the browser.
-    self_chat_suffix: str = Field(default="(You)", min_length=1)
+    # Exact label on your "Message yourself" chat in the chat list — i.e. your own
+    # WhatsApp display name (e.g. "Pancho Pistolas"). This is locale-independent: it
+    # is your name, not translated UI chrome, so it works on any host language.
+    # Required for `send`/`schedule`; find it at the top of your WhatsApp chat list.
+    self_chat_title: str = Field(default="")
 
 
 def get_settings() -> Settings:

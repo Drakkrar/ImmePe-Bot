@@ -28,13 +28,13 @@ def test_settings_defaults() -> None:
     assert settings.headless is False
     assert settings.timeout_ms == 60_000
     assert settings.log_level == "INFO"
-    assert settings.self_chat_suffix == "(You)"
+    assert settings.self_chat_title == ""
 
 
-def test_self_chat_suffix_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("IMMEPE_SELF_CHAT_SUFFIX", "(Tú)")
+def test_self_chat_title_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMMEPE_SELF_CHAT_TITLE", "Pancho Pistolas")
 
-    assert Settings().self_chat_suffix == "(Tú)"
+    assert Settings().self_chat_title == "Pancho Pistolas"
 
 
 async def test_send_rejects_empty_message() -> None:
@@ -42,3 +42,10 @@ async def test_send_rejects_empty_message() -> None:
 
     with pytest.raises(ValueError, match="must not be empty"):
         await client.send("   ")
+
+
+async def test_open_self_chat_requires_title() -> None:
+    client = WhatsAppClient(page=None, settings=Settings())  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="self_chat_title"):
+        await client.open_self_chat()
