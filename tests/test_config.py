@@ -6,12 +6,6 @@ from immepe_bot.config import Settings
 from immepe_bot.whatsapp import WhatsAppClient
 
 
-@pytest.fixture(autouse=True)
-def isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run in an empty directory so a developer's local .env never leaks in."""
-    monkeypatch.chdir(tmp_path)
-
-
 def test_settings_read_env_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IMMEPE_HEADLESS", "true")
     monkeypatch.setenv("IMMEPE_PROFILE_DIR", "custom-profile")
@@ -29,6 +23,27 @@ def test_settings_defaults() -> None:
     assert settings.timeout_ms == 60_000
     assert settings.log_level == "INFO"
     assert settings.self_chat_title == ""
+    assert settings.db_path == Path("jobs.db")
+    assert settings.web_host == "127.0.0.1"
+    assert settings.web_port == 8000
+    assert settings.probe_timeout_ms == 15_000
+    assert settings.misfire_grace_s == 300
+
+
+def test_service_settings_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IMMEPE_DB_PATH", "custom/jobs.sqlite")
+    monkeypatch.setenv("IMMEPE_WEB_HOST", "192.168.0.5")
+    monkeypatch.setenv("IMMEPE_WEB_PORT", "9001")
+    monkeypatch.setenv("IMMEPE_PROBE_TIMEOUT_MS", "2500")
+    monkeypatch.setenv("IMMEPE_MISFIRE_GRACE_S", "42")
+
+    settings = Settings()
+
+    assert settings.db_path == Path("custom/jobs.sqlite")
+    assert settings.web_host == "192.168.0.5"
+    assert settings.web_port == 9001
+    assert settings.probe_timeout_ms == 2500
+    assert settings.misfire_grace_s == 42
 
 
 def test_self_chat_title_override(monkeypatch: pytest.MonkeyPatch) -> None:
