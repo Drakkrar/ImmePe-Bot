@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     # Required for `send`/`schedule`; find it at the top of your WhatsApp chat list.
     self_chat_title: str = Field(default="")
 
+    # SQLite file that stores the scheduled jobs managed by the `serve` dashboard.
+    db_path: Path = Field(default=Path("jobs.db"))
+    # Address the `serve` web dashboard binds to. Default to localhost; the Docker
+    # image sets IMMEPE_WEB_HOST=0.0.0.0 via env so no bind-all literal lives in code.
+    web_host: str = Field(default="127.0.0.1")
+    web_port: int = Field(default=8000, gt=0, le=65535)
+    # Short, non-blocking timeout for the session status probe (authenticated vs. QR).
+    # Deliberately distinct from `timeout_ms`, which governs the long UI waits.
+    probe_timeout_ms: int = Field(default=15_000, gt=0)
+    # Grace period (seconds) for a scheduled fire that the service missed while busy or
+    # briefly down, passed to APScheduler as `misfire_grace_time`.
+    misfire_grace_s: int = Field(default=300, gt=0)
+
 
 def get_settings() -> Settings:
     """Build settings from the current environment."""

@@ -10,9 +10,13 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "apscheduler>=3.11.3",
+    "fastapi>=0.141.1",
+    "jinja2>=3.1.6",
     "playwright>=1.62.0",
     "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
     "typer>=0.27.2",
+    "uvicorn[standard]>=0.52.4",
 ]
 
 [project.scripts]
@@ -52,6 +56,7 @@ source = ["src/immepe_bot"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "mypy>=2.3.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",

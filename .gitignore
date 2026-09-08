@@ -19,3 +19,10 @@ htmlcov/
 # Secrets and authenticated WhatsApp Web session data
 .env
 .whatsapp-profile/
+
+# Scheduled-job database and Docker data volume
+jobs.db
+*.db
+*.db-wal
+*.db-shm
+/data/

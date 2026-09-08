@@ -1,0 +1,37 @@
+services:
+  immepe-bot:
+    build: .
+    image: immepe-bot
+    ports:
+      - "8000:8000"
+    # User settings (notably IMMEPE_SELF_CHAT_TITLE) come from .env; the container-only
+    # paths below override whatever the host .env sets for them.
+    env_file:
+      - .env
+    environment:
+      IMMEPE_HEADLESS: "true"
+      IMMEPE_PROFILE_DIR: /data/profile
+      IMMEPE_DB_PATH: /data/jobs.db
+      IMMEPE_WEB_HOST: "0.0.0.0"
+      IMMEPE_WEB_PORT: "8000"
+    volumes:
+      # Log in on the HOST first (`immepe-bot login`), then this reuses that session.
+      # Never run the host login/status and the container at the same time — they would
+      # collide on the Chromium profile LOCK.
+      - ./.whatsapp-profile:/data/profile
+      - ./data:/data
+    restart: unless-stopped
+    # Hit the HTTP health endpoint rather than `immepe-bot status`: the latter would
+    # launch a second Chromium against the profile the daemon already holds open.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request, sys;
+          sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status == 200 else 1)
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 60s

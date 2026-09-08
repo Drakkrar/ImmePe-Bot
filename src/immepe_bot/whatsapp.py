@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from enum import StrEnum
 
 from playwright.async_api import (
     BrowserContext,
@@ -23,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 WHATSAPP_URL = "https://web.whatsapp.com/"
 
+
+class SessionStatus(StrEnum):
+    """Result of a non-blocking probe of the WhatsApp Web login state."""
+
+    AUTHENTICATED = "authenticated"
+    NEEDS_QR = "needs_qr"
+    UNKNOWN = "unknown"
+
+
 # The "Message yourself" chat carries no stable marker in the sidebar: the "(You)"
 # label WhatsApp Web shows lives in the opened conversation's text, never as a chat-
 # list `title` attribute, so it cannot be matched there. Instead we match the chat by
@@ -30,6 +41,12 @@ WHATSAPP_URL = "https://web.whatsapp.com/"
 # locale-independent, since a name is not translated UI chrome.
 CHAT_LIST_SELECTOR = 'div[aria-label][role="grid"], #pane-side'
 MESSAGE_BOX_SELECTOR = 'div[contenteditable="true"][data-tab="10"]'
+# FRAGILE, best-effort only. On the login screen WhatsApp Web renders the linking QR as
+# a <canvas> inside a container carrying a `data-ref` pairing token. Like the other
+# selectors this is pinned to the live DOM with no API contract — but it is used ONLY to
+# tell NEEDS_QR from AUTHENTICATED during a status probe. A wrong guess degrades the
+# probe to UNKNOWN; it never affects sending. Prefer non-localized attributes (no text).
+QR_CODE_SELECTOR = 'div[data-ref], [data-testid="qrcode"]'
 # Submit by clicking the send button rather than pressing Enter, so we do not depend
 # on the "Enter is send" WhatsApp setting. Match it by icon, which is not localized.
 SEND_BUTTON_SELECTOR = (
@@ -80,6 +97,42 @@ class WhatsAppClient:
             CHAT_LIST_SELECTOR, timeout=self.settings.timeout_ms
         )
         logger.info("WhatsApp Web session is ready")
+
+    async def probe_status(self, timeout_ms: int) -> SessionStatus:
+        """Return the login state without ever blocking on a human QR scan.
+
+        Races the chat-list selector (present == authenticated, the same signal
+        `wait_until_ready` keys on) against the QR selector, returning whichever appears
+        first within `timeout_ms`. Returns UNKNOWN if neither shows — e.g. no
+        connectivity or a WhatsApp UI change — so callers fail fast instead of hanging.
+        """
+
+        async def _await(selector: str, status: SessionStatus) -> SessionStatus | None:
+            try:
+                await self.page.wait_for_selector(selector, timeout=timeout_ms)
+            except PlaywrightTimeoutError:
+                return None
+            return status
+
+        tasks: set[asyncio.Task[SessionStatus | None]] = {
+            asyncio.create_task(
+                _await(CHAT_LIST_SELECTOR, SessionStatus.AUTHENTICATED)
+            ),
+            asyncio.create_task(_await(QR_CODE_SELECTOR, SessionStatus.NEEDS_QR)),
+        }
+        try:
+            while tasks:
+                done, tasks = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    result = task.result()
+                    if result is not None:
+                        return result
+            return SessionStatus.UNKNOWN
+        finally:
+            for task in tasks:
+                task.cancel()
 
     async def open_self_chat(self) -> None:
         """Open the 'Message yourself' chat, found by your display name."""
@@ -165,8 +218,16 @@ async def _headless_user_agent(playwright: Playwright) -> str:
 
 
 @asynccontextmanager
-async def whatsapp_session(settings: Settings) -> AsyncIterator[WhatsAppClient]:
-    """Launch a persistent browser context so the login survives restarts."""
+async def whatsapp_session(
+    settings: Settings, *, wait_ready: bool = True
+) -> AsyncIterator[WhatsAppClient]:
+    """Launch a persistent browser context so the login survives restarts.
+
+    With `wait_ready=True` (default) the client is only yielded after the chat list is
+    up, keeping `login`/`send`/`schedule` behavior identical. Pass `wait_ready=False`
+    for the status probe and the `serve` daemon, which must inspect the login state (or
+    start the scheduler) without blocking on `wait_until_ready`'s long chat-list wait.
+    """
     settings.profile_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as playwright:
@@ -190,7 +251,8 @@ async def whatsapp_session(settings: Settings) -> AsyncIterator[WhatsAppClient]:
             page = context.pages[0] if context.pages else await context.new_page()
             await page.goto(WHATSAPP_URL, timeout=settings.timeout_ms)
             client = WhatsAppClient(page=page, settings=settings)
-            await client.wait_until_ready()
+            if wait_ready:
+                await client.wait_until_ready()
             yield client
         finally:
             await context.close()
