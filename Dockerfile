@@ -3,7 +3,7 @@
 FROM mcr.microsoft.com/playwright/python:v1.62.0-jammy
 
 # uv provides fast, locked dependency installs.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.8.0 /uv /uvx /bin/
 
 WORKDIR /app
 
