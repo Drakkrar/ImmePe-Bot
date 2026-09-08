@@ -1,0 +1,26 @@
+# Virtual environment and VCS
+.venv
+.git
+.gitignore
+
+# Tooling caches and build artifacts
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+dist
+build
+wheels
+*.egg-info
+__pycache__
+
+# Secrets and runtime state (mounted as volumes / provided via env_file at run time)
+.env
+.whatsapp-profile
+data
+*.db
+
+# Not needed inside the image
+tests
+.github

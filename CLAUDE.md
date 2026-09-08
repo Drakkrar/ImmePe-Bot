@@ -13,7 +13,7 @@ deliberately not a bulk/multi-recipient tool — keep changes within that scope.
 ```powershell
 uv sync                             # install deps into the venv
 uv run playwright install chromium  # one-time: fetch the browser Playwright drives
-uv run immepe-bot <cmd>             # run the CLI (login | send | schedule | version)
+uv run immepe-bot <cmd>             # login | send | schedule | status | serve | version
 
 # Quality gate — these four mirror CI exactly; run before considering work done:
 uv run ruff check .
@@ -31,24 +31,48 @@ security/typing lints to gate merges.
 
 ## Architecture
 
-Four modules in `src/immepe_bot/`, all async:
+Modules in `src/immepe_bot/`, all async:
 
 - **`cli.py`** — Typer app. Each command follows the same shape: `get_settings()` →
   `_configure_logging()` → define an inner `async def _run()` → `asyncio.run(_run())`.
-  This is the only place `asyncio.run` is called.
-- **`whatsapp.py`** — the core. `whatsapp_session(settings)` is an async context
-  manager that launches a **persistent** Chromium context (`launch_persistent_context`
-  with `user_data_dir=profile_dir`) so the logged-in session survives restarts, then
-  yields a `WhatsAppClient` wrapping the Playwright `Page`. Sending is UI automation:
-  locate the self-chat and message box, type the text (Shift+Enter for newlines), click
-  the send button, then **block in `_wait_until_transmitted` until the message leaves the
-  pending state** before returning (see gotcha below).
-- **`scheduler.py`** — `run_scheduled()` opens **one** session and keeps it alive,
-  driving an `AsyncIOScheduler` + `CronTrigger.from_crontab(cron)`; the job re-opens the
-  self-chat and sends each fire. It blocks on `asyncio.Event().wait()` until Ctrl+C. The
-  session is reused across fires rather than reconnected per job.
+  This is the only place `asyncio.run` is called (`serve` runs it via uvicorn's server).
+- **`whatsapp.py`** — the core. `whatsapp_session(settings, *, wait_ready=True)` is an
+  async context manager that launches a **persistent** Chromium context
+  (`launch_persistent_context` with `user_data_dir=profile_dir`) so the logged-in session
+  survives restarts, then yields a `WhatsAppClient` wrapping the Playwright `Page`.
+  `wait_ready=False` skips the blocking chat-list wait (used by the status probe and
+  `serve`). Sending is UI automation: locate the self-chat and message box, type the text
+  (Shift+Enter for newlines), click the send button, then **block in
+  `_wait_until_transmitted` until the message leaves the pending state** before returning
+  (see gotcha below). `WhatsAppClient.probe_status()` races the chat-list selector against
+  `QR_CODE_SELECTOR` to return `SessionStatus` (AUTHENTICATED/NEEDS_QR/UNKNOWN) without
+  ever blocking on a human QR scan.
+- **`scheduler.py`** — `run_scheduled()` is the legacy single-message foreground mode
+  behind the `schedule` command. Superseded by `serve` for persistent, multi-job,
+  UI-managed use; kept for quick one-off cron sends without the DB/web stack.
 - **`config.py`** — `Settings` (pydantic-settings `BaseSettings`), env prefix
   `IMMEPE_`, reads `.env`. `get_settings()` is the single construction point.
+- **`models.py`** — pydantic `Job`/`JobCreate`/`JobUpdate` + `JobStatus`. Cron and empty-
+  message validation live here (via `CronTrigger.from_crontab`), so bad input is rejected
+  identically from the CLI and the web layer.
+- **`store.py`** — `JobRepository`, a thin typed wrapper over stdlib `sqlite3` (no ORM).
+  The `jobs` table is the **single source of truth**; all SQL is qmark-parameterized. Note
+  the method is named `list`, which shadows the builtin inside the class, so its return
+  annotation uses `builtins.list[Job]`.
+- **`preflight.py`** — the two pre-auth checks: `check_profile_dir` (offline; keys on
+  Chromium/WhatsApp profile artifacts, not the top-level dir, since `whatsapp_session`
+  always `mkdir`s it) and `check_session_status` (launches a probe context). `guard_message`
+  is a **pure** decision function (unit-tested); `ensure_ready` composes both and raises
+  `PreflightError`. Surfaced as `immepe-bot status` and enforced at `serve` startup.
+- **`service.py`** — `BotService` owns the single shared `WhatsAppClient`, the
+  `AsyncIOScheduler`, and the `JobRepository`. `sync_from_db` rebuilds the scheduler from
+  the table on startup; the web layer calls `apply_job`/`unschedule_job` after every CRUD
+  op so edits take effect live.
+- **`web/`** — FastAPI dashboard. `app.py::build_app(settings, *, service=None)` wires the
+  routes + Jinja2 templates + static files; its `lifespan` opens the one session, runs both
+  pre-auth checks, starts the scheduler, and tears down on shutdown. `routes.py` is the job
+  CRUD + `send-now` + `/healthz`. Passing `service=` injects a ready `BotService` and skips
+  the browser — the seam the web tests use.
 
 ### Things that will bite you
 
@@ -81,11 +105,29 @@ Four modules in `src/immepe_bot/`, all async:
   on the Chrome version, so it must track the installed Chromium.
 - **`profile_dir` (`.whatsapp-profile`) holds live WhatsApp credentials.** It is
   gitignored; never commit it and never print its contents.
+- **`QR_CODE_SELECTOR` is the newest fragile selector** (joins `CHAT_LIST_SELECTOR`/
+  `MESSAGE_BOX_SELECTOR`). It is best-effort only: a wrong guess just degrades the
+  `probe_status` result to `UNKNOWN`; it never affects sending.
+- **`serve` is one process, one event loop, one WhatsApp session.** The Playwright `Page`
+  is a single shared resource, so **every** send — scheduled fire *and* the UI "send now"
+  — must go through `BotService.send_message`, which serializes them on one `asyncio.Lock`.
+  A send that stays pending holds that lock until `_wait_until_transmitted` times out.
+- **The `jobs` SQLite table is the source of truth; APScheduler is in-memory.** It is
+  rebuilt from the table on startup and mutated live on every web CRUD op — never persist
+  schedule state only in APScheduler.
+- **Docker reuses a host login.** Run `immepe-bot login` on the host to populate
+  `.whatsapp-profile`, then the container runs headless against the mounted profile. Never
+  run the host `login`/`status` and the container at once — they collide on the profile
+  `LOCK`. The compose healthcheck hits `/healthz` over HTTP, not `status`, for the same
+  reason.
 
 ## Tests
 
 `pytest` runs with `asyncio_mode = auto`, so `async def test_*` needs no marker. Tests
 avoid launching a real browser — e.g. `test_send_rejects_empty_message` constructs a
-`WhatsAppClient` with `page=None` and only exercises pure validation logic. A shared
-autouse fixture `chdir`s into a tmp dir so a developer's local `.env` never leaks into
-test runs. Keep new tests browser-free; assert on pure logic, not on Playwright calls.
+`WhatsAppClient` with `page=None` and only exercises pure validation logic; the web tests
+build the app with an injected `BotService` (a real repo + an `AsyncMock` WhatsApp client)
+so no browser starts. Shared fixtures live in `tests/conftest.py`: the autouse
+`isolated_cwd` `chdir`s into a tmp dir so a developer's local `.env` never leaks, and
+`repo` yields an initialized `JobRepository` on a throwaway sqlite file. Keep new tests
+browser-free; assert on pure logic, not on Playwright calls.
