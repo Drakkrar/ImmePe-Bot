@@ -1,0 +1,53 @@
+{% set action = "/jobs/" ~ job.id if job else "/jobs" %}
+<form
+  class="job-form"
+  hx-post="{{ action }}"
+  hx-target="#job-form"
+  hx-swap="innerHTML"
+>
+  <h2>{% if job %}Edit job{% else %}New job{% endif %}</h2>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <label>
+    Name
+    <input type="text" name="name" required value="{{ job.name if job else '' }}" />
+  </label>
+
+  <label>
+    Message
+    <textarea name="message" rows="3" required>{{ job.message if job else '' }}</textarea>
+  </label>
+
+  <label>
+    Cron
+    <input
+      type="text"
+      name="cron"
+      required
+      placeholder="0 9 * * 1-5"
+      value="{{ job.cron if job else '' }}"
+    />
+    <small>Five-field crontab, e.g. <code>0 9 * * 1-5</code> = 09:00 on weekdays.</small>
+  </label>
+
+  <label class="checkbox">
+    <input
+      type="checkbox"
+      name="enabled"
+      value="true"
+      {% if job is none or job.enabled %}checked{% endif %}
+    />
+    Enabled
+  </label>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">Save</button>
+    <button
+      type="button"
+      class="btn"
+      onclick="document.getElementById('job-form').innerHTML = ''"
+    >
+      Cancel
+    </button>
+  </div>
+</form>

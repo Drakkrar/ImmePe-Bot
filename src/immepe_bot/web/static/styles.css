@@ -1,0 +1,254 @@
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --panel-2: #1f232c;
+  --border: #2a2f3a;
+  --text: #e6e8ec;
+  --muted: #9aa3b2;
+  --accent: #25d366; /* WhatsApp green */
+  --accent-ink: #04150a;
+  --danger: #e5484d;
+  --error-bg: #3a1d1f;
+  --success-bg: #14361f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.toolbar input[type="search"] {
+  flex: 1;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.btn {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.form-area:empty {
+  display: none;
+}
+
+.job-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 560px;
+}
+
+.job-form h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.job-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.job-form label.checkbox {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.job-form label.checkbox input {
+  width: auto;
+}
+
+.job-form small {
+  color: var(--muted);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+table.jobs {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+table.jobs th,
+table.jobs td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-size: 0.9rem;
+}
+
+table.jobs th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+table.jobs tr:last-child td {
+  border-bottom: none;
+}
+
+td.message {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+td.cron code {
+  background: var(--panel-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.on {
+  background: var(--success-bg);
+  color: var(--accent);
+}
+
+.badge.off {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.error-detail {
+  color: var(--danger);
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+td.actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.tr.empty td,
+tr.empty td {
+  color: var(--muted);
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.flash-area:empty {
+  display: none;
+}
+
+.flash {
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+}
+
+.flash.success {
+  background: var(--success-bg);
+  border-color: var(--accent);
+}
+
+.flash.error {
+  background: var(--error-bg);
+  border-color: var(--danger);
+}

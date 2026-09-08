@@ -1,0 +1,59 @@
+<tr>
+  <td class="name">{{ job.name }}</td>
+  <td class="message" title="{{ job.message }}">{{ job.message }}</td>
+  <td class="cron"><code>{{ job.cron }}</code></td>
+  <td>
+    {% if job.enabled %}
+    <span class="badge on">on</span>
+    {% else %}
+    <span class="badge off">off</span>
+    {% endif %}
+  </td>
+  <td class="last-run">
+    {% if job.last_run_at %}
+    <span class="status {{ job.last_status.value if job.last_status else '' }}">
+      {{ job.last_run_at.strftime('%Y-%m-%d %H:%M') }}
+      {% if job.last_status %}({{ job.last_status.value }}){% endif %}
+    </span>
+    {% if job.last_error %}<div class="error-detail">{{ job.last_error }}</div>{% endif %}
+    {% else %}—{% endif %}
+  </td>
+  <td class="next-run">
+    {% if job.next_run_at %}{{ job.next_run_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}
+  </td>
+  <td class="actions">
+    <button
+      class="btn"
+      hx-get="/jobs/{{ job.id }}/edit"
+      hx-target="#job-form"
+      hx-swap="innerHTML"
+    >
+      Edit
+    </button>
+    <button
+      class="btn"
+      hx-post="/jobs/{{ job.id }}/toggle"
+      hx-target="#job-rows"
+      hx-swap="innerHTML"
+    >
+      {% if job.enabled %}Disable{% else %}Enable{% endif %}
+    </button>
+    <button
+      class="btn"
+      hx-post="/jobs/{{ job.id }}/send-now"
+      hx-target="#flash"
+      hx-swap="innerHTML"
+    >
+      Send now
+    </button>
+    <button
+      class="btn danger"
+      hx-post="/jobs/{{ job.id }}/delete"
+      hx-target="#job-rows"
+      hx-swap="innerHTML"
+      hx-confirm="Delete “{{ job.name }}”?"
+    >
+      Delete
+    </button>
+  </td>
+</tr>

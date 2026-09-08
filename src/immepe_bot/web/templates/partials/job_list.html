@@ -1,0 +1,9 @@
+{% if not jobs %}
+<tr class="empty">
+  <td colspan="7">No jobs yet. Click “New job” to create one.</td>
+</tr>
+{% else %}
+{% for job in jobs %}
+{% include "partials/job_row.html" %}
+{% endfor %}
+{% endif %}

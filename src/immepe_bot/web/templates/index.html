@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="flash" class="flash-area"></div>
+
+<section class="toolbar">
+  <input
+    type="search"
+    name="q"
+    placeholder="Search jobs by name or message…"
+    hx-get="/jobs"
+    hx-target="#job-rows"
+    hx-swap="innerHTML"
+    hx-trigger="input changed delay:300ms, search"
+  />
+  <button
+    class="btn primary"
+    hx-get="/jobs/new"
+    hx-target="#job-form"
+    hx-swap="innerHTML"
+  >
+    New job
+  </button>
+</section>
+
+<div id="job-form" class="form-area"></div>
+
+<table class="jobs">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Message</th>
+      <th>Cron</th>
+      <th>Enabled</th>
+      <th>Last run</th>
+      <th>Next run</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody
+    id="job-rows"
+    hx-get="/jobs"
+    hx-trigger="load, jobsChanged from:body"
+    hx-target="#job-rows"
+    hx-swap="innerHTML"
+  >
+    {% include "partials/job_list.html" %}
+  </tbody>
+</table>
+{% endblock %}
