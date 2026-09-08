@@ -1,6 +1,7 @@
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from immepe_bot.config import Settings
 from immepe_bot.models import JobCreate
+from immepe_bot.preflight import PreflightError
 from immepe_bot.service import BotService
 from immepe_bot.store import JobRepository
 from immepe_bot.web.app import build_app
@@ -140,3 +142,62 @@ def test_healthz(client: TestClient, service: BotService) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["jobs_count"] == 1
+
+
+def test_lifespan_closes_repo_on_preflight_failure() -> None:
+    repo = MagicMock(spec=JobRepository)
+
+    with (
+        patch("immepe_bot.web.app.JobRepository", return_value=repo),
+        patch(
+            "immepe_bot.web.app.check_profile_dir",
+            return_value=MagicMock(has_session=False),
+        ),
+        patch(
+            "immepe_bot.web.app.guard_message",
+            return_value="WhatsApp session not ready",
+        ),
+    ):
+        app = build_app(Settings())
+        with (
+            pytest.raises(PreflightError, match="WhatsApp session not ready"),
+            TestClient(app),
+        ):
+            pass
+
+    repo.initialize.assert_called_once_with()
+    repo.close.assert_called_once_with()
+
+
+def test_lifespan_shuts_down_scheduler_when_startup_fails() -> None:
+    repo = MagicMock(spec=JobRepository)
+    scheduler = MagicMock(spec=AsyncIOScheduler)
+    client = MagicMock(spec=WhatsAppClient)
+    client.probe_status = AsyncMock(return_value=object())
+    client.wait_until_ready = AsyncMock()
+
+    @asynccontextmanager
+    async def fake_whatsapp_session(
+        _settings: Settings, *, wait_ready: bool = False
+    ) -> AsyncIterator[WhatsAppClient]:
+        assert wait_ready is False
+        yield cast(WhatsAppClient, client)
+
+    with (
+        patch("immepe_bot.web.app.JobRepository", return_value=repo),
+        patch(
+            "immepe_bot.web.app.check_profile_dir",
+            return_value=MagicMock(has_session=True),
+        ),
+        patch("immepe_bot.web.app.guard_message", return_value=None),
+        patch("immepe_bot.web.app.whatsapp_session", fake_whatsapp_session),
+        patch("immepe_bot.web.app.AsyncIOScheduler", return_value=scheduler),
+        patch.object(BotService, "sync_from_db", side_effect=RuntimeError("boom")),
+    ):
+        app = build_app(Settings())
+        with pytest.raises(RuntimeError, match="boom"), TestClient(app):
+            pass
+
+    scheduler.start.assert_called_once_with()
+    scheduler.shutdown.assert_called_once_with(wait=False)
+    repo.close.assert_called_once_with()

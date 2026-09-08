@@ -47,36 +47,42 @@ def build_app(settings: Settings, *, service: BotService | None = None) -> FastA
 
         repo = JobRepository(settings.db_path)
         repo.initialize()
+        try:
+            # Check 1 (offline): a persisted session must exist before we
+            # launch anything.
+            profile = check_profile_dir(settings)
+            if not profile.has_session:
+                raise PreflightError(
+                    guard_message(profile, None) or "WhatsApp session not ready"
+                )
 
-        # Check 1 (offline): a persisted session must exist before we launch anything.
-        profile = check_profile_dir(settings)
-        if not profile.has_session:
-            raise PreflightError(
-                guard_message(profile, None) or "WhatsApp session not ready"
-            )
+            # One session for the whole daemon lifetime.
+            async with whatsapp_session(settings, wait_ready=False) as client:
+                # Check 2 (authoritative) on the SAME client — launching a
+                # second context
+                # would collide on the profile LOCK.
+                status = await client.probe_status(settings.probe_timeout_ms)
+                guard = guard_message(profile, status)
+                if guard is not None:
+                    raise PreflightError(guard)
+                await client.wait_until_ready()
 
-        # One session for the whole daemon lifetime.
-        async with whatsapp_session(settings, wait_ready=False) as client:
-            # Check 2 (authoritative) on the SAME client — launching a second context
-            # would collide on the profile LOCK.
-            status = await client.probe_status(settings.probe_timeout_ms)
-            guard = guard_message(profile, status)
-            if guard is not None:
-                raise PreflightError(guard)
-            await client.wait_until_ready()
-
-            scheduler = AsyncIOScheduler()
-            scheduler.start()
-            bot = BotService(
-                settings=settings, repo=repo, scheduler=scheduler, client=client
-            )
-            bot.sync_from_db()
-            app.state.service = bot
-            try:
-                yield
-            finally:
-                scheduler.shutdown(wait=False)
-        repo.close()
+                scheduler = AsyncIOScheduler()
+                scheduler_started = False
+                try:
+                    scheduler.start()
+                    scheduler_started = True
+                    bot = BotService(
+                        settings=settings, repo=repo, scheduler=scheduler, client=client
+                    )
+                    bot.sync_from_db()
+                    app.state.service = bot
+                    yield
+                finally:
+                    if scheduler_started:
+                        scheduler.shutdown(wait=False)
+        finally:
+            repo.close()
 
     app = FastAPI(title="ImmePe-Bot", lifespan=lifespan)
     app.include_router(router)
